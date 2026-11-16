@@ -17,7 +17,6 @@ import (
 // and the rollup node must reconnect and keep following the chain without a reset.
 func TestVerifierResumesWithoutResetAfterELRestart(gt *testing.T) {
 	t := devtest.ParallelT(gt)
-	sysgo.SkipOnOpGeth(t, "the sysgo op-geth keeps its chain in memory, so a restart loses it")
 	sysgo.SkipOnOpRethCL(t, "restarts the EL while its CL keeps running")
 	sys := presets.NewSingleChainMultiNode(t)
 	require := t.Require()
