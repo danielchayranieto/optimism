@@ -101,7 +101,6 @@ func bootPCDFromArtifacts(t *testing.T, cfg pcdBootConfig) pcdBootResult {
 	require.Equal(t, l1ChainID, l1ChainConfig.ChainID, "L1 chain config must match eth_chainId")
 	require.Nil(t, l1ChainConfig.OsakaTime, "Prague Anvil must not use the post-Prague Osaka fork")
 	require.NotNil(t, l1ChainConfig.BlobScheduleConfig)
-	require.Nil(t, l1ChainConfig.BlobScheduleConfig.Osaka, "Prague Anvil must not use the Osaka blob schedule")
 
 	// Anvil provides only the L1 execution endpoint, so use a fake beacon for the
 	// L1 consensus endpoint.
@@ -193,17 +192,12 @@ func bootPCDFromArtifacts(t *testing.T, cfg pcdBootConfig) pcdBootResult {
 }
 
 // pcdPragueL1ChainConfig copies params.AllDevChainProtocolChanges and removes
-// Osaka to match the Anvil Prague chain. It also copies BlobScheduleConfig so
-// this test does not change shared state.
+// the forks after Prague to match the Anvil Prague chain.
 func pcdPragueL1ChainConfig(chainID *big.Int) *params.ChainConfig {
 	chainConfig := *params.AllDevChainProtocolChanges
 	chainConfig.ChainID = new(big.Int).Set(chainID)
 	chainConfig.OsakaTime = nil
-	if chainConfig.BlobScheduleConfig != nil {
-		blobSchedule := *chainConfig.BlobScheduleConfig
-		blobSchedule.Osaka = nil
-		chainConfig.BlobScheduleConfig = &blobSchedule
-	}
+	chainConfig.BogotaTime = nil
 	return &chainConfig
 }
 

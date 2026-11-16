@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/testlog"
 	"github.com/ethereum-optimism/optimism/op-service/testutils"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
+	txmgrmocks "github.com/ethereum-optimism/optimism/op-service/txmgr/mocks"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
@@ -161,6 +162,9 @@ func (q *MockTxQueue) Load(id string) txmgr.TxCandidate {
 
 func TestBatchSubmitter_sendTx_GasLimit(t *testing.T) {
 	bs, _ := setup(t, nil)
+	txm := new(txmgrmocks.TxManager)
+	txm.On("From").Return(common.Address{0x01})
+	bs.Txmgr = txm
 
 	tests := []struct {
 		name     string
