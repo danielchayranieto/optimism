@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"math/big"
@@ -259,6 +261,54 @@ func TestBlockValidator(t *testing.T) {
 			require.Equal(t, res, test.result)
 		})
 	}
+}
+
+// TestGossipSnappyLengthPreamble pins which snappy length preambles the block validator and the
+// message-ID function accept: up to five bytes, the most a uint32 uvarint takes, even when not
+// minimal. kona-gossip's snappy_length_preamble_matches_op_node
+// (rust/kona/crates/node/gossip/src/config.rs) pins the same vectors, so both nodes agree on
+// which frames are valid snappy.
+func TestGossipSnappyLengthPreamble(t *testing.T) {
+	decoded := []byte("hello")
+	const topic = "test"
+	msgID := BuildMsgIdFn(&rollup.Config{})
+	expectedMsgID := func(domain [4]byte, data []byte) string {
+		h := sha256.New()
+		h.Write(domain[:])
+		var topicLen [8]byte
+		binary.LittleEndian.PutUint64(topicLen[:], uint64(len(topic)))
+		h.Write(topicLen[:])
+		h.Write([]byte(topic))
+		h.Write(data)
+		return string(h.Sum(nil)[:20])
+	}
+
+	// The literal "hello" behind its canonical one-byte preamble and behind the same length
+	// padded with continuation bytes to five bytes.
+	for _, accepted := range []string{"051068656c6c6f", "85808080001068656c6c6f"} {
+		t.Run("Accept_"+accepted, func(t *testing.T) {
+			frame := common.FromHex(accepted)
+			n, err := snappy.DecodedLen(frame)
+			require.NoError(t, err)
+			require.Equal(t, len(decoded), n)
+			data, err := snappy.Decode(nil, frame)
+			require.NoError(t, err)
+			require.Equal(t, decoded, data)
+			id := msgID(&pubsub_pb.Message{Data: frame, Topic: ptr.New(topic)})
+			require.Equal(t, expectedMsgID(MessageDomainValidSnappy, decoded), id)
+		})
+	}
+
+	// The same length padded to six bytes.
+	t.Run("RejectOverlong", func(t *testing.T) {
+		frame := common.FromHex("8580808080001068656c6c6f")
+		_, err := snappy.DecodedLen(frame)
+		require.ErrorIs(t, err, snappy.ErrCorrupt)
+		_, err = snappy.Decode(nil, frame)
+		require.ErrorIs(t, err, snappy.ErrCorrupt)
+		id := msgID(&pubsub_pb.Message{Data: frame, Topic: ptr.New(topic)})
+		require.Equal(t, expectedMsgID(MessageDomainInvalidSnappy, frame), id)
+	})
 }
 
 // TestGossipTimestampThreshold tests that the configurable timestamp threshold works correctly

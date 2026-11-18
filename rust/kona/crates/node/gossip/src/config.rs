@@ -348,6 +348,43 @@ mod tests {
         assert_eq!(snappy_decompressed_len_within_bound(&small), Some(5));
     }
 
+    /// A snappy length preamble of up to five bytes, the most a `uint32` uvarint takes, is
+    /// accepted even when it is not minimal; a longer one is rejected. op-node's
+    /// `TestGossipSnappyLengthPreamble` (`op-node/p2p/gossip_test.go`) pins the same vectors, so
+    /// both nodes agree on which frames are valid snappy.
+    #[test]
+    fn snappy_length_preamble_matches_op_node() {
+        let decoded = b"hello";
+        let topic = "test";
+        let make = |data: Vec<u8>| Message {
+            source: None,
+            data,
+            sequence_number: None,
+            topic: libp2p::gossipsub::TopicHash::from_raw(topic),
+        };
+
+        // The literal "hello" behind its canonical one-byte preamble and behind the same length
+        // padded with continuation bytes to five bytes.
+        for accepted in ["051068656c6c6f", "85808080001068656c6c6f"] {
+            let frame = alloy_primitives::hex::decode(accepted).unwrap();
+            assert_eq!(snappy_decompressed_len_within_bound(&frame), Some(decoded.len()));
+            assert_eq!(Decoder::new().decompress_vec(&frame).unwrap(), decoded);
+            assert_eq!(
+                compute_message_id(&make(frame)).0,
+                expected_message_id(MESSAGE_DOMAIN_VALID_SNAPPY, topic, decoded)
+            );
+        }
+
+        // The same length padded to six bytes.
+        let overlong = alloy_primitives::hex::decode("8580808080001068656c6c6f").unwrap();
+        assert_eq!(snappy_decompressed_len_within_bound(&overlong), None);
+        assert!(Decoder::new().decompress_vec(&overlong).is_err());
+        assert_eq!(
+            compute_message_id(&make(overlong.clone())).0,
+            expected_message_id(MESSAGE_DOMAIN_INVALID_SNAPPY, topic, &overlong)
+        );
+    }
+
     fn message_id_invalid_snappy_count(snapshot: metrics_util::debugging::Snapshot) -> u64 {
         use metrics_util::debugging::DebugValue;
         for (ckey, _unit, _desc, value) in snapshot.into_vec() {
