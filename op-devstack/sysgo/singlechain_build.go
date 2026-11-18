@@ -95,7 +95,8 @@ func applyConfigPrefundedL2(t devtest.T, keys devkeys.Keys, l1ChainID, l2ChainID
 // This is the env-aware dispatch point for preset runtimes that don't build explicit node
 // specs. Runtimes constructed from explicit MixedSingleChainNodeSpec.CLKind values (e.g.
 // NewMixedSingleChainRuntime) don't route through here; they resolve the env up front via
-// ResolveMixedL2CLKind instead.
+// ResolveMixedL2CLKind instead. A runtime that calls skipOpNodeOnlyRuntimeOnKonaNode must drop
+// that call when it starts a CL through here, or the kona-node run keeps skipping its tests.
 func startL2CLForKey(
 	t devtest.T,
 	keys devkeys.Keys,
